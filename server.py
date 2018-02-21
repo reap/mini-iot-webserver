@@ -4,26 +4,52 @@ from flask import Flask
 from flask import render_template
 from flask import jsonify
 from influxdb import InfluxDBClient
+import re
 
 app = Flask(__name__)
 
-hostName = "asb"
+hostName = "77.95.246.253"
+client = InfluxDBClient(hostName, 8086, '', '', 'mini-iot')
+
+def get_tags_for_series(series_name, tag_name):
+    found_tags = []
+    resultset = client.query("show series")
+    for serie in list(resultset.get_points()):
+        if serie['key'].startswith(series_name):
+            match = re.search("[-a-zA-Z]+,([a-zA-Z]+)=([a-zA-Z]+)", serie['key'])
+            if match == None:
+                print("FAIL: could not parse tags from serie: " + serie['key'])
+            else:
+                if tag_name == match.group(1):
+                  #  print(match.group(2))
+                    found_tags.append(match.group(2))
+                else:
+                    print("Found tag '" + match.group(1) + "=" + match.group(2) + "' which is skipped")
+        #else: 
+                #print("Did not match :" + serie['key'])
+    return found_tags
 
 @app.route("/")
 def hello():
     return render_template("index.html")
 
+
 @app.route("/api/temperature")
-def get_temperature():
-    # client = InfluxDBClient(hostName, 8086, '', '', 'mini-iot')
-    # result = client.query('select * from temperature group by source order by time desc limit 100;')
+def get_available_tags():
+    tag_list = get_tags_for_series("temperature", "source")
+    return jsonify({'tags': tag_list})
 
-    resultJson = {"results":[{"series":[{"name":"temperature","tags":{"source":"red"},"columns":["time","value"],"values":[[1519200437000000000,28.115406036376953],[1519200436000000000,28.02581787109375],[1519200435000000000,28.115406036376953],[1519200434000000000,28.151241302490234],[1519200433000000000,28.34833526611328],[1519200432000000000,28.258747100830078],[1519200431000000000,28.151241302490234],[1519200430000000000,28.187076568603516],[1519200429000000000,28.115406036376953],[1519200428000000000,28.151241302490234]]}]},{"series":[{"name":"temperature","tags":{"source":"blue"},"columns":["time","value"],"values":[[1519200437000000000,27.125],[1519200436000000000,27.125],[1519200435000000000,27.26785659790039],[1519200434000000000,27.125],[1519200433000000000,27.26785659790039],[1519200432000000000,27.16071319580078],[1519200431000000000,27.178569793701172],[1519200430000000000,27.178569793701172],[1519200429000000000,27.28571319580078],[1519200428000000000,27.23214340209961]]}]}]}
-    values = resultJson.get("results")[0]['series'][0]['values']
 
-    print(values)
-
-    return jsonify(values)
+@app.route("/api/temperature/<source>")
+def get_temperature(source):
+    #client = InfluxDBClient(hostName, 8086, '', '', 'mini-iot')
+    
+    #tags = get_tags_for_series("temperature", "source")    
+    
+    query = "select time, mean(value) as value from temperature where source = '" + source + "' and time > now() - 1d group by time(30m);"
+    print(query)
+    result = client.query(query)
+    return jsonify(list(result.get_points()))
 
 if __name__ == "__main__":
     app.run()

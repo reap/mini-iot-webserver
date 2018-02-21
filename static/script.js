@@ -1,36 +1,89 @@
-function update_chart() {
+function update_chart_old() {
     console.log("requesting chart update")
     $.getJSON("/api/temperature", function (json) {
-        var data = [];
+        //var data = [];
         var labels = [];
-        var temperature = [];
-        var humidity = [];
-//        console.log(json);
-        json.forEach(list => {
-    //        console.log(list);
-  //          console.log(list[0]);
+        var datasets = []
 
-            labels.push(new Date(list[0] / 1000000).toISOString());
-            temperature.push(list[1]);
-
-        });
-
-      //  console.log(data);
-      //  console.log(temperature);
         lineChartData = {
             labels: labels,
-            datasets: [{
-                label: "Frist",
-                borderColor: 'rgb(255, 99, 132)',
-                backgroundColor: 'rgb(255, 99, 132)',
-                fill: false,
-                data: temperature
-            }]
+            datasets: datasets
         };
-        draw_chart(lineChartData);
+
+        //var humidity = [];
+        //console.log(json);
+        json['tags'].forEach(tag => {
+            labels = []; // hack to avoid duplicate labels
+            temperature = [];
+            console.log("get values for source=" + tag)
+            $.getJSON("/api/temperature/" + tag, function (json_list) {
+                console.log(json_list);
+                json_list.forEach(list => {
+                    if (list["value"] != null) {
+                        labels.push(list["time"]);
+                        value = list["value"];
+                        //console.log("Adding value: " + value)
+                        temperature.push(value);
+                    }
+                }
+                )
+                color = getRandomRgb();
+                datasets.push({
+                    label: tag,
+                    borderColor: color,
+                    backgroundColor: color,
+                    fill: false,
+                    data: temperature
+                });
+                lineChartData.labels = labels;
+            });
+            console.log(datasets);
+
+            lineChartData.datasets = datasets;
+    
+            draw_chart(lineChartData);
+        });
+
+        
     });
 }
 
+
+function update_chart() {
+    var tag = "red";
+    $.getJSON("/api/temperature/" + tag, function (json_list) {
+        var labels = [];
+        var datasets = [];
+        temperature = [];
+
+        lineChartData = {
+            labels: labels,
+            datasets: datasets
+        };
+        console.log(json_list);
+        json_list.forEach(list => {
+            if (list["value"] != null) {
+                labels.push(list["time"]);
+                value = list["value"];
+                //console.log("Adding value: " + value)
+                temperature.push(value);
+            }
+        }
+        )
+        color = getRandomRgb();
+        datasets.push({
+            label: tag,
+            borderColor: color,
+            backgroundColor: color,
+            fill: false,
+            data: temperature
+        });
+        lineChartData.labels = labels;
+        lineChartData.datasets = datasets;
+    
+        draw_chart(lineChartData);
+});
+}
 
 function draw_chart(lineChartData) {
     var ctx = document.getElementById("canvas").getContext("2d");
@@ -65,3 +118,12 @@ function draw_chart(lineChartData) {
         }
     });
 }
+
+function getRandomRgb() {
+    var num = Math.round(0xffffff * Math.random());
+    var r = num >> 16;
+    var g = num >> 8 & 255;
+    var b = num & 255;
+    return 'rgb(' + r + ', ' + g + ', ' + b + ')';
+}
+
